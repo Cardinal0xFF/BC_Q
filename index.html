@@ -1,67 +1,83 @@
 <!doctype html>
 <html lang="ru">
-  <head>
-    <meta charset="utf-8">
-    <title>BabyCare Q</title>
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#4a4cff">
-    <style>
-      :root{font-family:system-ui,sans-serif;background:#fff5f5}
-      body{display:flex;flex-direction:column;min-height:100vh;justify-content:center;align-items:center;margin:0}
-      button{
-        font-size:28px;padding:20px 40px;border-radius:14px;border:none;
-        color:#fff;background:#4a4cff;cursor:pointer;transition:.2s;
-        margin-bottom: 24px;
-      }
-      button:active{background:#0047a1;transform:scale(.96)}
-      #data{
-        white-space:pre;font-family:monospace;font-size:17px;
-        background:#f8fafd;border-radius:10px;padding:18px 30px;
-        color:#161644;min-width:270px;min-height:100px;
-        box-shadow:0 3px 14px #bcc2e92b;
-      }
-    </style>
-  </head>
-  <body>
-    <button id="btn">СОЕДИНИТЬ</button>
-    <div id="data">Нет данных</div>
-    <script>
-      if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+<head>
+  <meta charset="utf-8">
+  <title>BabyCare Q</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#4a4cff">
+  <style>
+    :root { font-family: 'Segoe UI', Arial, sans-serif; background: #f7f6ff; }
+    body { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .card {
+      background: #fff;
+      box-shadow: 0 6px 24px #0001;
+      border-radius: 24px;
+      padding: 32px 36px;
+      min-width: 330px;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    h1 { color: #574b90; font-weight: 900; margin-bottom: 18px; letter-spacing: 1px;}
+    button {
+      font-size: 22px; padding: 18px 36px; border-radius: 12px; border: none;
+      color: #fff; background: #4a4cff; cursor: pointer; transition: .15s;
+      font-weight: 600; margin-bottom: 16px;
+    }
+    button:active { background: #3d39bb; transform: scale(.97); }
+    .data-list { text-align: left; margin-top: 18px; }
+    .data-item { font-size: 20px; margin-bottom: 10px; }
+    .status { color: #888; margin-bottom: 8px; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>BabyCare Q</h1>
+    <div class="status" id="status">Отключено</div>
+    <button id="btnConnect">СОЕДИНИТЬ</button>
+    <button id="btnRead" style="display:none">ОБНОВИТЬ</button>
+    <div class="data-list" id="datalist"></div>
+  </div>
+  <script>
+    const SERVICE_UUID = '0000180f-0000-1000-8000-00805f9b34fb';
+    const CHAR_UUID    = '0000fff1-0000-1000-8000-00805f9b34fb';
 
-      const SERVICE_UUID = '0000180f-0000-1000-8000-00805f9b34fb';
-      const CHAR_UUID    = '0000fff1-0000-1000-8000-00805f9b34fb';
+    let dev, gatt, chr;
 
-      let dev, chr, run = false;
+    function showStatus(msg) { document.getElementById('status').textContent = msg; }
+    function showData(data) {
+      // Пример: строка данных — 'T:23.4C RH:40% A:0.01 0.02 0.98'
+      // Можно парсить как нужно. Здесь просто отображаем построчно.
+      const out = data.split(/[\n\r]+/).map(x => `<div class="data-item">${x}</div>`).join('');
+      document.getElementById('datalist').innerHTML = out;
+    }
 
-      async function connect() {
-        dev = await navigator.bluetooth.requestDevice({
-          filters: [{ namePrefix: 'BabyCareQ' }],
-          optionalServices: [SERVICE_UUID]
-        });
-        const gatt = await dev.gatt.connect();
-        const svc  = await gatt.getPrimaryService(SERVICE_UUID);
-        chr = await svc.getCharacteristic(CHAR_UUID);
+    async function connect() {
+      showStatus('Поиск устройства...');
+      dev = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: 'BabyCareQ' }],
+        optionalServices: [SERVICE_UUID]
+      });
+      gatt = await dev.gatt.connect();
+      const svc = await gatt.getPrimaryService(SERVICE_UUID);
+      chr = await svc.getCharacteristic(CHAR_UUID);
+      showStatus('Подключено');
+      document.getElementById('btnConnect').style.display = 'none';
+      document.getElementById('btnRead').style.display = '';
+      document.getElementById('datalist').innerHTML = '';
+    }
 
-        // --- слушаем уведомления BLE ---
-        await chr.startNotifications();
-        chr.addEventListener('characteristicvaluechanged', e => {
-          const val = new TextDecoder().decode(e.target.value);
-          document.getElementById('data').textContent = val;
-        });
+    async function readData() {
+      if (!chr) return;
+      // читаем value как строку (если данные передаются как .writeValue(new TextEncoder().encode(...)) )
+      const val = await chr.readValue();
+      const decoder = new TextDecoder();
+      const data = decoder.decode(val.buffer);
+      showData(data || 'Нет данных');
+    }
 
-        document.getElementById('btn').textContent = '▶ START';
-      }
-
-      async function toggle() {
-        run = !run;
-        await chr.writeValue(Uint8Array.of(run ? 0x01 : 0x00));
-        document.getElementById('btn').textContent = run ? '■ STOP' : '▶ START';
-      }
-
-      document.getElementById('btn').onclick = async () => {
-        (!dev || !dev.gatt.connected) ? await connect() : await toggle();
-      };
-    </script>
-  </body>
+    document.getElementById('btnConnect').onclick = connect;
+    document.getElementById('btnRead').onclick = readData;
+  </script>
+</body>
 </html>
