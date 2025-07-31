@@ -1,56 +1,52 @@
 <!doctype html>
 <html lang="ru">
-<head>
-  <meta charset="utf-8">
-  <title>BabyCare Q</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#4a4cff">
-  <style>
-    :root{font-family:system-ui,sans-serif;background:#fff5f5}
-    body{display:flex;min-height:100vh;justify-content:center;align-items:center;margin:0}
-    button{
-      font-size:28px;padding:20px 40px;border-radius:14px;border:none;
-      color:#fff;background:#4a4cff;cursor:pointer;transition:.2s;
-    }
-    button:active{background:#0047a1;transform:scale(.96)}
-  </style>
-</head>
-<body>
-  <button id="btn">СОЕДИНИТЬ</button>
-  <script>
-    // -- PWA Service Worker
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js');
-    }
+  <head>
+    <meta charset="utf-8">
+    <title>BabyCare Q</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4a4cff">
+    <style>
+      :root{font-family:system-ui,sans-serif;background:#fff5f5}
+      body{display:flex;min-height:100vh;justify-content:center;align-items:center;margin:0}
+      button{
+        font-size:28px;padding:20px 40px;border-radius:14px;border:none;
+        color:#fff;background:#4a4cff;cursor:pointer;transition:.2s;
+      }
+      button:active{background:#0047a1;transform:scale(.96)}
+    </style>
+  </head>
+  <body>
+    <button id="btn">СОЕДИНИТЬ</button>
+    <script>
+      if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 
-    // -- Web Bluetooth (обновлённый вариант!)
-    let dev, gatt, chr, run = false;
+      // UUID сервиса и характеристики ДОЛЖНЫ совпадать с прошивкой!
+      const SERVICE_UUID = '0000180f-0000-1000-8000-00805f9b34fb';
+      const CHAR_UUID    = '0000fff1-0000-1000-8000-00805f9b34fb';
 
-    // ЗАДАЙ СВОЙ UUID, если в прошивке другой!
-    const SERVICE_UUID = 0x180F; // Стандартный Battery service (пример)
-    const CHAR_UUID    = '0000ffb1-0000-1000-8000-00805f9b34fb'; // Полный UUID своей характеристики!
+      let dev, gatt, chr, run = false;
 
-    async function connect() {
-      dev = await navigator.bluetooth.requestDevice({
-        filters: [{namePrefix: 'BabyCareQ'}],   // имя твоего устройства!
-        optionalServices: [SERVICE_UUID]
-      });
-      gatt = await dev.gatt.connect();
-      const svc = await gatt.getPrimaryService(SERVICE_UUID);
-      chr = await svc.getCharacteristic(CHAR_UUID);
-      document.getElementById('btn').textContent = '▶ START';
-    }
+      async function connect() {
+        dev = await navigator.bluetooth.requestDevice({
+          filters: [{ namePrefix: 'BabyCareQ' }],
+          optionalServices: [SERVICE_UUID]
+        });
+        gatt = await dev.gatt.connect();
+        const svc = await gatt.getPrimaryService(SERVICE_UUID);
+        chr = await svc.getCharacteristic(CHAR_UUID);
+        document.getElementById('btn').textContent = '▶ START';
+      }
 
-    async function toggle() {
-      run = !run;
-      await chr.writeValue(Uint8Array.of(run ? 0x01 : 0x00));
-      document.getElementById('btn').textContent = run ? '■ STOP' : '▶ START';
-    }
+      async function toggle() {
+        run = !run;
+        await chr.writeValue(Uint8Array.of(run ? 0x01 : 0x00));
+        document.getElementById('btn').textContent = run ? '■ STOP' : '▶ START';
+      }
 
-    document.getElementById('btn').onclick = async () => {
-      (!dev || !dev.gatt.connected) ? await connect() : await toggle();
-    };
-  </script>
-</body>
+      document.getElementById('btn').onclick = async () => {
+        (!dev || !dev.gatt.connected) ? await connect() : await toggle();
+      };
+    </script>
+  </body>
 </html>
